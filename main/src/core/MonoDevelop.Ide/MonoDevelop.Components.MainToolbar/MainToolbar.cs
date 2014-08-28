@@ -90,6 +90,8 @@ namespace MonoDevelop.Components.MainToolbar
 		int ignoreConfigurationChangedCount;
 		int ignoreRuntimeChangedCount;
 
+		bool haveFocus;
+
 		public Cairo.ImageSurface Background {
 			get;
 			set;
@@ -113,6 +115,13 @@ namespace MonoDevelop.Components.MainToolbar
 		public MonoDevelop.Ide.StatusBar StatusBar {
 			get {
 				return statusArea;
+			}
+		}
+
+		internal bool HaveFocus {
+			set {
+				haveFocus = value;
+				QueueDraw ();
 			}
 		}
 
@@ -381,6 +390,21 @@ namespace MonoDevelop.Components.MainToolbar
 		{
 			if (args.PathChanged (ToolbarExtensionPath))
 				BuildToolbar ();
+		}
+
+		protected override void OnRealized ()
+		{
+			base.OnRealized ();
+
+			IdeApp.Workbench.RootWindow.FocusInEvent += (o, args) => {
+				Console.WriteLine ("FocusIn");
+				HaveFocus = true;
+			};
+
+			IdeApp.Workbench.RootWindow.FocusOutEvent += (o, args) => {
+				Console.WriteLine ("FocusOut!");
+				HaveFocus = false;
+			};
 		}
 
 		protected override bool OnButtonPressEvent (Gdk.EventButton evnt)
@@ -882,19 +906,33 @@ namespace MonoDevelop.Components.MainToolbar
 				);
 				context.Clip ();
 				context.LineWidth = 1;
-				if (Background != null && Background.Width > 0) {
-					for (int x=0; x < Allocation.Width; x += Background.Width) {
-						Background.Show (context, x, -TitleBarHeight);
-					}
-				} else {
+				if (!haveFocus) {
 					context.Rectangle (0, 0, Allocation.Width, Allocation.Height);
-					using (var lg = new LinearGradient (0, 0, 0, Allocation.Height)) {
-						lg.AddColorStop (0, Style.Light (StateType.Normal).ToCairoColor ());
-						lg.AddColorStop (1, Style.Mid (StateType.Normal).ToCairoColor ());
-						context.SetSource (lg);
-					}
+					using (var solid = new SolidPattern (Style.Light (StateType.Normal).ToCairoColor ()))
+						context.SetSource (solid);
 					context.Fill ();
+				} else {
+					if (Background != null && Background.Width > 0) {
+						for (int x=0; x < Allocation.Width; x += Background.Width) {
+							Background.Show (context, x, -TitleBarHeight);
+						}
+					} else {
+						context.Rectangle (0, 0, Allocation.Width, Allocation.Height);
+						if (haveFocus) {
+							using (var lg = new LinearGradient (0, 0, 0, Allocation.Height)) {
+								lg.AddColorStop (0, Style.Light (StateType.Normal).ToCairoColor ());
+								lg.AddColorStop (1, Style.Mid (StateType.Normal).ToCairoColor ());
+								context.SetSource (lg);
+							}
+						} else {
+							using (var solid = new SolidPattern (Style.Light(StateType.Normal).ToCairoColor ()))
+							{
+								context.SetSource (solid);
+							}
+						}
+						context.Fill ();
 
+					}
 				}
 				context.MoveTo (0, Allocation.Height - 0.5);
 				context.RelLineTo (Allocation.Width, 0);
